@@ -1,0 +1,121 @@
+<?php
+
+include_once 'fb_commons.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function fb_commons_menu() {
+  $menu = array();
+  $menu['fb-commons/ajax/like/%'] = array(
+    'page callback' => 'fb_commons_ajax_like',
+    'page arguments' => array(3),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'fb_commons_ajax_like_callback',
+  );
+  return $menu;
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function fb_commons_preprocess_node(&$vars) {
+  drupal_add_js(drupal_get_path('module', 'fb_commons') . '/js/fb_commons.rate.js', array('weight' => 100));
+  fb_commons_likes($vars['node']->nid, $vars);
+}
+
+function fb_commons_likes($nid, &$vars = array()) {
+  // get the number of likes for current user
+  $view = views_get_view('fb_commons_likes');
+  $view->set_display('block');
+  $view->set_arguments(array($nid));
+  $view->get_total_rows = TRUE;
+  $view->execute();
+  $likes_count = count($view->result);
+  $likes_total = $view->total_rows;
+  $likes_users = 0;
+  if ($likes_total) {
+    $likes_users = $view->render();
+  }
+ 
+  // get the number of all likes 
+  $view = views_get_view('fb_commons_likes');
+  $view->set_display('block_1');
+  $view->set_arguments(array($nid));
+  $view->get_total_rows = TRUE;
+  $view->execute();
+  $likes_user = count($view->result);
+
+  if ($likes_count > 0 OR $likes_user > 0) {
+    $vars['fb_commons_likes_count'] = $likes_count;
+    $vars['fb_commons_likes_users'] = $likes_users;
+    $vars['fb_commons_likes_total'] = $likes_total;
+    $vars['fb_commons_likes_user'] = $likes_user;
+  }
+  else {
+    $vars['fb_commons_likes_count'] = 0;
+    $vars['fb_commons_likes_user'] = 0;
+  }
+  $vars['fb_commons_likes_output'] = theme('fb_commons_who_liked_this', array('content' => fb_commons_prepare_output($vars)));
+}
+
+function fb_commons_prepare_output($vars) {
+  $content = '';
+  if ($vars['fb_commons_likes_count'] > 0 OR $vars['fb_commons_likes_user'] > 0) {
+
+    if ($vars['fb_commons_likes_user'] > 0) {
+      $content_likes = 'You';
+    }
+
+    if ($vars['fb_commons_likes_count'] > 0) {
+      if ($vars['fb_commons_likes_user'] > 0) {
+        $content_likes .= ', ' . $vars['fb_commons_likes_users'];
+      }
+      else {
+        $content_likes = $vars['fb_commons_likes_users'];
+      }
+      $diff = $vars['fb_commons_likes_total'] - $vars['fb_commons_likes_count'];
+      if ($diff > 0) {
+        $content_likes .= ' ' . t('and @likes', array('@likes' => format_plural($diff, '1 other', '@count others')));
+      }
+      $content_likes .= ' likes this post.';
+    }
+    else {
+      $content_likes .= ' like this post.';
+    }
+    $content = $content_likes;
+  }
+
+  return $content;
+}
+
+function fb_commons_ajax_like($nid) {
+  $vars = array();
+  fb_commons_likes($nid, $vars);
+  return $vars;
+}
+
+function fb_commons_ajax_like_callback($vars) {
+  print theme('fb_commons_who_liked_this', array('content' => fb_commons_prepare_output($vars)));
+}
+
+function fb_commons_theme($existing, $type, $theme, $path) {
+  return array(
+    'fb_commons_who_liked_this' => array(
+      'variables' => array(
+        'content' => NULL,
+        'wrapper' => NULL
+      ),
+    )
+  );
+}
+
+function theme_fb_commons_who_liked_this($vars) {
+  $output = '';
+  if ($vars['content']) {
+    $output = $vars['content'];
+  }
+  if ($vars['wrapper']) $output = '<div class="content-fb-commons-likes-data-wrapper">' . $output . '</div>';
+  return $output;
+}
